@@ -48,6 +48,9 @@
       ]
     }
   },
+  "bin": {
+    "pixel-agents-antigravity": "./bin/antigravity-cli.js"
+  },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "build:webview": "cd webview-ui && npm run build",

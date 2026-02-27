@@ -111,6 +111,18 @@ There are several areas where contributions would be very welcome:
 
 If any of these interest you, feel free to open an issue or submit a PR.
 
+## Antigravity Integration
+
+Pixel Agents now supports native integration with **Antigravity**, the agentic AI coding assistant! We provide a standalone CLI that allows you to run the pixel art office UI locally and connect it directly to Antigravity's event stream, without needing VSCode.
+
+To launch the Antigravity integration UI, you can use the newly included CLI:
+
+```bash
+npx pixel-agents-antigravity
+```
+
+This starts a local server on port 8080. Antigravity will automatically detect this and stream its internal tool execution and task events to the character animations!
+
 ## Contributions
 
 See [CONTRIBUTORS.md](CONTRIBUTORS.md) for instructions on how to contribute to this project.
