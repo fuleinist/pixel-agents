@@ -7,7 +7,7 @@ import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js'
 import { setFloorSprites } from '../office/floorTiles.js'
 import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
-import { vscode } from '../vscodeApi.js'
+import { vscode, isStandalone } from '../vscodeApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
 
 export interface SubagentCharacter {
@@ -357,6 +357,14 @@ export function useExtensionMessages(
     }
     window.addEventListener('message', handler)
     vscode.postMessage({ type: 'webviewReady' })
+
+    if (isStandalone) {
+      setTimeout(() => {
+        // Mock a default layout initialization so the canvas can render in browser
+        window.postMessage({ type: 'layoutLoaded', layout: null }, '*')
+      }, 100)
+    }
+
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
