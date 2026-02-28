@@ -124,3 +124,14 @@ curl -X POST http://localhost:8080/api/event \
      -H "Content-Type: application/json" \
      -d '{"type":"agentToolStart","id":1,"toolId":"write-task","status":"write_to_file"}'
 ```
+
+---
+
+## 5. Automated Antigravity E2E Testing (Optional)
+If you are developing inside an Antigravity shell (using Gemini/Claude bindings) and want the agent to automatically pump events to `localhost:8080` while it works on a task, you can install the dedicated **Pixel Agent Mode** workflow.
+
+Setup scripts are located in `integrations/antigravity/`:
+- **Windows**: Run `.\integrations\antigravity\setup-workflow.ps1`
+- **Linux/Mac**: Run `./integrations/antigravity/setup-workflow.sh`
+
+Once installed, simply type `/pixel-agent-mode` followed by your prompt in the Antigravity UI to trigger an automated E2E animation test!
