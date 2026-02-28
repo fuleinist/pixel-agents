@@ -18,6 +18,26 @@ if (!fs.existsSync(uiPath)) {
 
 const clients = [];
 
+// Cache to handle tab refreshes cleanly without losing state
+const agentStateCache = {
+    agents: [],
+    statuses: {},
+    seats: {},
+    folderNames: {}
+};
+let currentLayout = null; // Will be loaded from disk if exists
+
+// Load layout from disk on startup
+const layoutPath = path.join(process.cwd(), 'pixel-layout.json');
+if (fs.existsSync(layoutPath)) {
+    try {
+        currentLayout = JSON.parse(fs.readFileSync(layoutPath, 'utf8'));
+        console.log("Loaded custom pixel-layout.json");
+    } catch (e) {
+        console.error("Failed to load pixel-layout.json", e);
+    }
+}
+
 // In a full integration, this would use Express/Fastify to serve static assets 
 // and establish a WebSocket connection with the Antigravity agent process.
 const server = http.createServer((req, res) => {
@@ -35,16 +55,98 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
         });
         clients.push(res);
         req.on('close', () => {
             const idx = clients.indexOf(res);
             if (idx >= 0) clients.splice(idx, 1);
         });
+
+        // 1. Initial State Sync: Folders
+        res.write(`data: ${JSON.stringify({ type: 'workspaceFolders', folders: [{ name: 'Antigravity Workspace', path: process.cwd() }] })}\n\n`);
+
+        // 2. Initial State Sync: Layout
+        res.write(`data: ${JSON.stringify({ type: 'layoutLoaded', layout: currentLayout })}\n\n`);
+
+        // 3. Initial State Sync: Agents
+        if (agentStateCache.agents.length > 0) {
+            res.write(`data: ${JSON.stringify({ type: 'existingAgents', agents: agentStateCache.agents, agentMeta: agentStateCache.seats, folderNames: agentStateCache.folderNames })}\n\n`);
+            for (const id of agentStateCache.agents) {
+                if (agentStateCache.statuses[id]) {
+                    res.write(`data: ${JSON.stringify({ type: 'agentStatus', id, status: agentStateCache.statuses[id] })}\n\n`);
+                }
+            }
+        }
+
+    } else if (req.url === '/api/event' && req.method === 'OPTIONS') {
+        res.writeHead(204, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+        });
+        res.end();
+    } else if (req.url === '/api/event' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk.toString());
+        req.on('end', () => {
+            try {
+                const payload = JSON.parse(body);
+
+                // Track caching values for tab-refresh synchronization
+                if (payload.type === 'agentCreated') {
+                    if (!agentStateCache.agents.includes(payload.id)) {
+                        agentStateCache.agents.push(payload.id);
+                    }
+                    if (payload.folderName) {
+                        agentStateCache.folderNames[payload.id] = payload.folderName;
+                    }
+                } else if (payload.type === 'agentStatus') {
+                    agentStateCache.statuses[payload.id] = payload.status;
+                } else if (payload.type === 'agentClosed') {
+                    agentStateCache.agents = agentStateCache.agents.filter(a => a !== payload.id);
+                    delete agentStateCache.statuses[payload.id];
+                }
+
+                clients.forEach(c => c.write(`data: ${JSON.stringify(payload)}\n\n`));
+                // Handle pre-flight CORS / Success
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                });
+                res.end(JSON.stringify({ status: 'success' }));
+            } catch (e) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'invalid JSON' }));
+            }
+        });
+    } else if (req.url === '/api/extension-message' && req.method === 'POST') {
+        // UI saving back to the fake VSCode extension host
+        let body = '';
+        req.on('data', chunk => body += chunk.toString());
+        req.on('end', () => {
+            try {
+                const msg = JSON.parse(body);
+                if (msg.type === 'saveLayout') {
+                    fs.writeFileSync(layoutPath, JSON.stringify(msg.layout, null, 2));
+                    currentLayout = msg.layout;
+                } else if (msg.type === 'saveAgentSeats') {
+                    agentStateCache.seats = msg.seats;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'success' }));
+            } catch (e) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'invalid JSON' }));
+            }
+        });
     } else if (req.url === '/test-mock') {
         // Broadcast a sequence of mock events for testing
         const sendMsg = (msg) => {
+            // Also save to cache so tab refresh maintains the mock state
+            if (msg.type === 'agentCreated') agentStateCache.agents.push(msg.id);
+            if (msg.type === 'agentStatus') agentStateCache.statuses[msg.id] = msg.status;
             clients.forEach(c => c.write(`data: ${JSON.stringify(msg)}\n\n`));
         };
         sendMsg({ type: 'agentCreated', id: 42, folderName: 'antigravity-tests' });

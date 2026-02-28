@@ -359,11 +359,6 @@ export function useExtensionMessages(
     vscode.postMessage({ type: 'webviewReady' })
 
     if (isStandalone) {
-      setTimeout(() => {
-        // Mock a default layout initialization so the canvas can render in browser
-        window.postMessage({ type: 'layoutLoaded', layout: null }, '*')
-      }, 100)
-
       const evtSource = new EventSource('/events')
       evtSource.onmessage = (event) => {
         try {
