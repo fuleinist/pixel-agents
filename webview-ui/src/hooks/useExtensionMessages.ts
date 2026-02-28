@@ -363,6 +363,20 @@ export function useExtensionMessages(
         // Mock a default layout initialization so the canvas can render in browser
         window.postMessage({ type: 'layoutLoaded', layout: null }, '*')
       }, 100)
+
+      const evtSource = new EventSource('/events')
+      evtSource.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data)
+          window.postMessage(msg, '*')
+        } catch (e) {
+          console.error('[Webview] Failed to parse SSE event', e)
+        }
+      }
+      return () => {
+        window.removeEventListener('message', handler)
+        evtSource.close()
+      }
     }
 
     return () => window.removeEventListener('message', handler)

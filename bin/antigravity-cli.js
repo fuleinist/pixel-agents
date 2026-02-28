@@ -16,6 +16,8 @@ if (!fs.existsSync(uiPath)) {
     process.exit(1);
 }
 
+const clients = [];
+
 // In a full integration, this would use Express/Fastify to serve static assets 
 // and establish a WebSocket connection with the Antigravity agent process.
 const server = http.createServer((req, res) => {
@@ -29,6 +31,29 @@ const server = http.createServer((req, res) => {
             res.writeHead(404);
             res.end('index.html not found');
         }
+    } else if (req.url === '/events') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        });
+        clients.push(res);
+        req.on('close', () => {
+            const idx = clients.indexOf(res);
+            if (idx >= 0) clients.splice(idx, 1);
+        });
+    } else if (req.url === '/test-mock') {
+        // Broadcast a sequence of mock events for testing
+        const sendMsg = (msg) => {
+            clients.forEach(c => c.write(`data: ${JSON.stringify(msg)}\n\n`));
+        };
+        sendMsg({ type: 'agentCreated', id: 42, folderName: 'antigravity-tests' });
+        setTimeout(() => sendMsg({ type: 'agentStatus', id: 42, status: 'active' }), 500);
+        setTimeout(() => sendMsg({ type: 'agentToolStart', id: 42, toolId: 'tool-view', status: 'view_file' }), 1000);
+        setTimeout(() => sendMsg({ type: 'agentToolDone', id: 42, toolId: 'tool-view' }), 4000);
+        setTimeout(() => sendMsg({ type: 'agentToolStart', id: 42, toolId: 'tool-typing', status: 'write_to_file' }), 4500);
+        res.writeHead(200);
+        res.end('Mock events sequence triggered!');
     } else {
         // Basic static asset resolution for js/css/images
         if (req.url.startsWith('/assets/')) {
